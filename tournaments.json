@@ -1,0 +1,49 @@
+
+{
+  "upiId": "pawanponnam-1@okicici",
+  "adminWhatsApp": "919867637326",
+  "banners": [
+    "banner1.jpg",
+    "banner2.jpg",
+    "banner3.jpg"
+  ],
+  "rules": [
+    "Strictly no hacks or 3rd party tools.",
+    "Emulator players are not allowed unless specified.",
+    "Must join the room 10 minutes before the start.",
+    "Screen recording is recommended for dispute resolution.",
+    "Prize will be distributed within 24 hours of match completion."
+  ],
+  "tournaments": [
+    {
+      "id": "1",
+      "name": "Weekend Battle Royale",
+      "matchType": "Solo",
+      "entryFee": 30,
+      "dateTime": "25 Oct, 08:00 PM",
+      "prizePool": "₹2000",
+      "status": "Open",
+      "image": "tournament1.jpg",
+      "description": "Intense solo combat on Bermuda map. Show your survival skills!",
+      "rules": ["Standard Solo Rules Apply"],
+      "totalSlots": 48,
+      "joinedSlots": 12,
+      "minSlots": 20
+    },
+    {
+      "id": "2",
+      "name": "Duo Dominance",
+      "matchType": "Duo",
+      "entryFee": 60,
+      "dateTime": "26 Oct, 09:30 PM",
+      "prizePool": "₹5000",
+      "status": "Open",
+      "image": "tournament2.jpg",
+      "description": "Team up with your best mate and rule the battlefield.",
+      "rules": ["Standard Duo Rules Apply"],
+      "totalSlots": 24,
+      "joinedSlots": 18,
+      "minSlots": 10
+    }
+  ]
+}
