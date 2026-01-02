@@ -1,5 +1,5 @@
 {
-  "name": "Free Fire Tournament Hub",
+  "name": "Free Fire Hub",
   "description": "A professional mobile-first platform for hosting and managing local Free Fire tournaments with UPI payment integration and WhatsApp confirmation.",
   "requestFramePermissions": [
     "camera"
