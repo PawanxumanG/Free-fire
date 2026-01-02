@@ -1,14 +1,3 @@
 
-import React from 'react';
-import ReactDOM from 'react-dom/client';
-import App from './App';
-
-const rootElement = document.getElementById('root');
-if (rootElement) {
-  const root = ReactDOM.createRoot(rootElement);
-  root.render(
-    <React.StrictMode>
-      <App />
-    </React.StrictMode>
-  );
-}
+// This file is now empty as all logic has been consolidated into index.html
+// to ensure perfect compatibility with static hosts like GitHub Pages.

@@ -1,4 +1,10 @@
 
+// types.ts
+// This file defines the shared interfaces used across the application to ensure type safety.
+
+/**
+ * Represents the user's gaming and personal profile.
+ */
 export interface UserProfile {
   fullName: string;
   ign: string;
@@ -8,6 +14,9 @@ export interface UserProfile {
   upiId: string;
 }
 
+/**
+ * Represents a tournament event.
+ */
 export interface Tournament {
   id: string;
   name: string;
@@ -24,17 +33,22 @@ export interface Tournament {
   minSlots?: number;
 }
 
+/**
+ * Represents a tournament that a user has participated in.
+ */
 export interface JoinedTournament {
-  id: string;
+  id?: string;
   name: string;
   dateTime: string;
   entryFee: number;
-  joinedAt: string;
+  joinedAt: string; // ISO Date string
 }
 
+/**
+ * Global application configuration settings managed by admins.
+ */
 export interface AppConfig {
-  banners: string[];
-  rules: string[];
-  upiId: string;
   adminWhatsApp: string;
+  upiId: string;
+  banners: string[];
 }
