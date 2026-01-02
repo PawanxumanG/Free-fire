@@ -45,6 +45,7 @@
   }
 }
 </script>
+<link rel="stylesheet" href="/index.css">
 </head>
 <body>
     <div id="root"></div>
@@ -357,7 +358,7 @@
                         <div className="flex items-center gap-2"><div className="w-8 h-8 bg-neon rounded-xl flex items-center justify-center shadow-lg"><span className="text-white font-gaming text-xs italic">FF</span></div><h1 className="font-gaming text-sm tracking-wider text-neon">${config.appName}</h1></div>
                         <div className="flex items-center gap-1">
                             <a href="https://youtube.com/@shinzofreefire" className="p-2 text-white/20 hover:text-white"><${Lucide.Youtube} size=${18}/></a>
-                            <a href="https://instagram.com/shinzo_ff" className="p-2 text-white/20 hover:text-white"><${Lucide.Instagram} size=${18}/></a>
+                            <a href="https://www.instagram.com/legend_shinzo_ff?igsh=MWNhMmx3ZG5oNDdkbw==/shinzo_ff" className="p-2 text-white/20 hover:text-white"><${Lucide.Instagram} size=${18}/></a>
                             <button onClick=${() => setIsAdminLoginOpen(true)} className="p-2 text-white/10 hover:text-neon"><${Lucide.Lock} size=${14}/></button>
                         </div>
                     </header>
@@ -505,5 +506,6 @@
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(React.createElement(App));
     </script>
+<script type="module" src="/index.tsx"></script>
 </body>
 </html>
