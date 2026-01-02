@@ -9,7 +9,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700&family=Russo+One&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Rubik:wght@400;500;700&family=Russo+One&display=swap" rel="stylesheet">
     <style id="dynamic-theme">
         :root {
             --neon: #ff4d00;
@@ -18,7 +18,7 @@
     </style>
     <style>
         body { 
-            font-family: 'Rubik', sans-serif; 
+            font-family: 'Inter', sans-serif; 
             background-color: #0a0a0a; 
             color: #fff; 
             -webkit-tap-highlight-color: transparent; 
@@ -33,8 +33,20 @@
         
         @keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.8; transform: scale(0.98); } }
         .pulse { animation: pulse 2s infinite ease-in-out; }
+        @keyframes pulse-fast { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.5; transform: scale(0.95); } }
+        .pulse-fast { animation: pulse-fast 1s infinite ease-in-out; }
+        
         input:focus, select:focus, textarea:focus { border-color: var(--neon) !important; outline: none; }
         .backdrop-blur-md { backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+        .tabular-nums { font-variant-numeric: tabular-nums; }
+
+        select {
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='white' stroke-width='2'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 0.75rem center;
+            background-size: 1rem;
+        }
     </style>
 <script type="importmap">
 {
@@ -45,23 +57,21 @@
   }
 }
 </script>
-<link rel="stylesheet" href="/index.css">
 </head>
 <body>
     <div id="root"></div>
 
     <script type="module">
-        import React, { useState, useEffect } from 'https://esm.sh/react@18.2.0';
+        import React, { useState, useEffect, useCallback } from 'https://esm.sh/react@18.2.0';
         import ReactDOM from 'https://esm.sh/react-dom@18.2.0/client';
         import htm from 'https://esm.sh/htm@3.1.1';
         import * as Lucide from 'https://esm.sh/lucide-react@0.244.0';
 
         const html = htm.bind(React.createElement);
 
-        // --- Constants & Storage Keys ---
         const STORAGE_KEY = "ff_hub_user_profile";
         const ADMIN_STORAGE_KEY = "ff_hub_admin_secrets";
-        const GITHUB_URL = "https://raw.githubusercontent.com/pawanxumang/pawanxumang.github.io/main/tournaments.json";
+        const GITHUB_RAW_URL = "https://raw.githubusercontent.com/pawanxumang/pawanxumang.github.io/main/tournaments.json";
 
         const DEFAULT_CONFIG = {
             appName: "FF TOURNAMENT HUB",
@@ -88,20 +98,51 @@
                     image: 'https://images.unsplash.com/photo-1511512578047-dfb367046420?q=80&w=800', 
                     totalSlots: 48, 
                     joinedSlots: 14,
-                    minSlots: 20
+                    minSlots: 20,
+                    description: "Join the most elite tournament of the season."
                 }
             ]
         };
 
-        // --- Helpers ---
         const hexToRgb = (hex) => {
             const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
             return result ? `${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)}` : '255, 77, 0';
         };
 
-        // --- Components ---
+        const CountdownTimer = ({ dateStr }) => {
+            const [timeLeft, setTimeLeft] = useState('');
 
-        const AdminPanel = ({ config, tournaments, onClose }) => {
+            useEffect(() => {
+                const calculate = () => {
+                    let normalized = dateStr;
+                    if (!dateStr.includes(new Date().getFullYear())) {
+                        normalized = dateStr.replace(',', ` ${new Date().getFullYear()},`);
+                    }
+                    
+                    const target = new Date(normalized).getTime();
+                    const now = new Date().getTime();
+                    const diff = target - now;
+
+                    if (diff <= 0) return 'STARTED';
+
+                    const d = Math.floor(diff / (1000 * 60 * 60 * 24));
+                    const h = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                    const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+                    const s = Math.floor((diff % (1000 * 60)) / 1000);
+
+                    if (d > 0) return `${d}d ${h}h`;
+                    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+                };
+
+                const interval = setInterval(() => setTimeLeft(calculate()), 1000);
+                setTimeLeft(calculate());
+                return () => clearInterval(interval);
+            }, [dateStr]);
+
+            return html`<span className="tabular-nums">${timeLeft}</span>`;
+        };
+
+        const AdminPanel = ({ config, tournaments, onClose, onRefresh }) => {
             const [localConfig, setLocalConfig] = useState(config);
             const [localTournaments, setLocalTournaments] = useState(tournaments);
             const [github, setGithub] = useState(() => {
@@ -128,14 +169,17 @@
                         method: 'PUT',
                         headers: { 'Authorization': `token ${github.token}`, 'Content-Type': 'application/json' },
                         body: JSON.stringify({
-                            message: `Tournament Arena Sync: ${new Date().toLocaleString()}`,
+                            message: `Sync: ${new Date().toLocaleString()}`,
                             content: btoa(unescape(encodeURIComponent(JSON.stringify(payload, null, 2)))),
                             sha
                         })
                     });
                     if (!res.ok) throw new Error("Sync failed");
-                    setStatus({ state: 'success', msg: 'All changes are now LIVE!' });
-                    setTimeout(() => setStatus({ state: 'idle', msg: '' }), 3000);
+                    setStatus({ state: 'success', msg: 'Sync Successful!' });
+                    setTimeout(() => {
+                        onRefresh();
+                        setStatus({ state: 'idle', msg: '' });
+                    }, 1500);
                 } catch (e) {
                     setStatus({ state: 'error', msg: e.message });
                 }
@@ -144,7 +188,7 @@
             const addTournament = () => {
                 setLocalTournaments([{
                     id: Date.now().toString(),
-                    name: "New Scrims",
+                    name: "NEW MATCH",
                     matchType: "Solo",
                     entryFee: 50,
                     dateTime: "01 Nov, 08:00 PM",
@@ -153,18 +197,17 @@
                     image: localConfig.banners[0] || "",
                     totalSlots: 48,
                     joinedSlots: 0,
-                    minSlots: 10
+                    minSlots: 10,
+                    description: "Standard match description."
                 }, ...localTournaments]);
             };
 
-            const addRule = () => {
-                setLocalConfig({...localConfig, rules: [...localConfig.rules, "New Rule"]});
+            const updateTournament = (id, field, val) => {
+                setLocalTournaments(localTournaments.map(t => t.id === id ? { ...t, [field]: val } : t));
             };
 
-            const removeRule = (idx) => {
-                setLocalConfig({...localConfig, rules: localConfig.rules.filter((_, i) => i !== idx)});
-            };
-
+            const addRule = () => setLocalConfig({...localConfig, rules: [...localConfig.rules, "New Rule"]});
+            const removeRule = (idx) => setLocalConfig({...localConfig, rules: localConfig.rules.filter((_, i) => i !== idx)});
             const updateRule = (idx, val) => {
                 const newRules = [...localConfig.rules];
                 newRules[idx] = val;
@@ -173,107 +216,144 @@
 
             return html`
                 <div className="fixed inset-0 z-[200] bg-[#0a0a0a] flex flex-col text-white animate-in slide-in-from-right">
-                    <header className="px-6 py-4 bg-[#121212] border-b border-white/5 flex items-center justify-between shadow-xl">
-                        <div className="flex items-center gap-2"><${Lucide.Settings} size=${18} className="text-white/40"/><h2 className="font-gaming text-[10px] tracking-[0.2em] uppercase">Control Center</h2></div>
+                    <header className="px-6 py-4 bg-[#121212] border-b border-white/5 flex items-center justify-between sticky top-0 z-50">
+                        <div className="flex items-center gap-2"><${Lucide.Settings} size=${16} className="text-white/40"/><h2 className="font-bold text-xs uppercase tracking-widest">Admin Control</h2></div>
                         <button onClick=${onClose} className="p-2 bg-white/5 rounded-full"><${Lucide.X} size=${18} /></button>
                     </header>
-                    <main className="flex-1 overflow-y-auto p-5 space-y-8 pb-32">
+                    <main className="flex-1 overflow-y-auto p-5 space-y-10 pb-40">
                         <section className="space-y-4">
-                            <h3 className="text-[10px] font-bold text-white/20 uppercase tracking-[0.2em] ml-1">App Identity</h3>
-                            <div className="bg-[#121212] rounded-2xl p-4 border border-white/5 space-y-4">
+                            <h3 className="text-[10px] font-bold text-white/20 uppercase tracking-[0.2em] ml-1">Global Config</h3>
+                            <div className="bg-[#121212] rounded-3xl p-6 border border-white/5 space-y-5 shadow-xl">
                                 <div className="space-y-1">
                                     <label className="text-[9px] text-white/30 uppercase font-bold ml-1">App Name</label>
-                                    <input className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-3 text-xs" value=${localConfig.appName} onChange=${(e) => setLocalConfig({...localConfig, appName: e.target.value})} />
+                                    <input className="w-full bg-black/40 border border-white/5 rounded-2xl px-5 py-3 text-xs" value=${localConfig.appName} onChange=${(e) => setLocalConfig({...localConfig, appName: e.target.value})} />
                                 </div>
-                                <div className="space-y-1">
-                                    <label className="text-[9px] text-white/30 uppercase font-bold ml-1">Theme Color</label>
-                                    <div className="flex gap-2">
-                                        <input type="color" className="w-12 h-10 bg-black/40 border border-white/5 rounded-xl p-1" value=${localConfig.themeColor} onChange=${(e) => setLocalConfig({...localConfig, themeColor: e.target.value})} />
-                                        <input className="flex-1 bg-black/40 border border-white/5 rounded-xl px-4 py-3 text-xs font-mono" value=${localConfig.themeColor} onChange=${(e) => setLocalConfig({...localConfig, themeColor: e.target.value})} />
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-1">
+                                        <label className="text-[9px] text-white/30 uppercase font-bold ml-1">Theme (Hex)</label>
+                                        <input className="w-full bg-black/40 border border-white/5 rounded-2xl px-5 py-3 text-xs font-mono" value=${localConfig.themeColor} onChange=${(e) => setLocalConfig({...localConfig, themeColor: e.target.value})} />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="text-[9px] text-white/30 uppercase font-bold ml-1">UPI ID</label>
+                                        <input className="w-full bg-black/40 border border-white/5 rounded-2xl px-5 py-3 text-xs" value=${localConfig.upiId} onChange=${(e) => setLocalConfig({...localConfig, upiId: e.target.value})} />
                                     </div>
                                 </div>
-                            </div>
-                        </section>
-
-                        <section className="space-y-4">
-                            <h3 className="text-[10px] font-bold text-white/20 uppercase tracking-[0.2em] ml-1">Arena Rules (Safety Tab)</h3>
-                            <div className="bg-[#121212] rounded-2xl p-4 border border-white/5 space-y-4">
-                                ${localConfig.rules.map((rule, idx) => html`
-                                    <div key=${idx} className="flex gap-2">
-                                        <textarea className="flex-1 bg-black/40 border border-white/5 rounded-xl px-4 py-2 text-[10px] min-h-[60px]" value=${rule} onChange=${(e) => updateRule(idx, e.target.value)} />
-                                        <button onClick=${() => removeRule(idx)} className="p-2 bg-red-500/10 text-red-500 rounded-xl flex items-center justify-center"><${Lucide.Trash2} size=${14}/></button>
-                                    </div>
-                                `)}
-                                <button onClick=${addRule} className="w-full py-3 bg-neon/10 border border-neon/20 rounded-xl text-[10px] font-bold tracking-widest text-neon uppercase">+ Add New Rule</button>
-                            </div>
-                        </section>
-
-                        <section className="space-y-4">
-                            <h3 className="text-[10px] font-bold text-white/20 uppercase tracking-[0.2em] ml-1">Payments & Contact</h3>
-                            <div className="bg-[#121212] rounded-2xl p-4 border border-white/5 space-y-4">
                                 <div className="space-y-1">
-                                    <label className="text-[9px] text-white/30 uppercase font-bold ml-1">Merchant UPI ID</label>
-                                    <input className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-3 text-xs" value=${localConfig.upiId} onChange=${(e) => setLocalConfig({...localConfig, upiId: e.target.value})} />
-                                </div>
-                                <div className="space-y-1">
-                                    <label className="text-[9px] text-white/30 uppercase font-bold ml-1">WhatsApp Admin (91XXXXXXXXXX)</label>
-                                    <input className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-3 text-xs" value=${localConfig.adminWhatsApp} onChange=${(e) => setLocalConfig({...localConfig, adminWhatsApp: e.target.value})} />
+                                    <label className="text-[9px] text-white/30 uppercase font-bold ml-1">WhatsApp Admin</label>
+                                    <input className="w-full bg-black/40 border border-white/5 rounded-2xl px-5 py-3 text-xs" value=${localConfig.adminWhatsApp} onChange=${(e) => setLocalConfig({...localConfig, adminWhatsApp: e.target.value})} />
                                 </div>
                             </div>
                         </section>
 
-                        <section className="space-y-4">
+                        <section className="space-y-6">
                             <div className="flex justify-between items-center ml-1">
-                                <h3 className="text-[10px] font-bold text-white/20 uppercase tracking-[0.2em]">Live Matches</h3>
-                                <button onClick=${addTournament} className="text-[9px] font-bold text-neon uppercase tracking-widest">+ Add New</button>
+                                <h3 className="text-[10px] font-bold text-white/20 uppercase tracking-[0.2em]">Tournaments</h3>
+                                <button onClick=${addTournament} className="text-[9px] font-bold text-neon uppercase tracking-widest border border-neon/30 px-3 py-1.5 rounded-full">+ NEW MATCH</button>
                             </div>
-                            <div className="space-y-6">
+                            <div className="space-y-8">
                                 ${localTournaments.map(t => html`
-                                    <div key=${t.id} className="bg-[#121212] rounded-2xl border border-white/5 p-5 space-y-4 shadow-xl">
-                                        <div className="flex justify-between">
-                                            <input className="bg-transparent border-none outline-none text-white font-gaming text-sm w-full uppercase" value=${t.name} onChange=${(e) => setLocalTournaments(localTournaments.map(x => x.id === t.id ? {...x, name: e.target.value} : x))} />
-                                            <button onClick=${() => setLocalTournaments(localTournaments.filter(x => x.id !== t.id))} className="text-red-500/20"><${Lucide.Trash2} size=${18}/></button>
-                                        </div>
-                                        <div className="space-y-1">
-                                            <label className="text-[8px] text-white/20 uppercase font-bold ml-1">Banner Image URL</label>
-                                            <input className="w-full bg-black/40 border border-white/5 rounded-xl px-3 py-2 text-[10px]" value=${t.image} onChange=${(e) => setLocalTournaments(localTournaments.map(x => x.id === t.id ? {...x, image: e.target.value} : x))} />
-                                        </div>
-                                        <div className="grid grid-cols-2 gap-3">
-                                            <div className="space-y-1">
-                                                <label className="text-[8px] text-white/20 uppercase font-bold ml-1">Entry Fee (₹)</label>
-                                                <input type="number" className="w-full bg-black/40 border border-white/5 rounded-xl px-3 py-2 text-[10px]" value=${t.entryFee} onChange=${(e) => setLocalTournaments(localTournaments.map(x => x.id === t.id ? {...x, entryFee: parseInt(e.target.value)||0} : x))} />
+                                    <div key=${t.id} className="bg-[#121212] rounded-3xl border border-white/5 overflow-hidden shadow-2xl">
+                                        <div className="p-6 space-y-5">
+                                            <div className="flex justify-between items-start">
+                                                <div className="space-y-1 w-full">
+                                                    <label className="text-[8px] text-white/20 uppercase font-bold ml-1">Match Title</label>
+                                                    <input className="w-full bg-transparent border-none outline-none text-white font-bold text-base" value=${t.name} onChange=${(e) => updateTournament(t.id, 'name', e.target.value)} />
+                                                </div>
+                                                <button onClick=${() => setLocalTournaments(localTournaments.filter(x => x.id !== t.id))} className="text-red-500/30 p-2"><${Lucide.Trash2} size=${18}/></button>
                                             </div>
-                                            <div className="space-y-1">
-                                                <label className="text-[8px] text-white/20 uppercase font-bold ml-1">Prize Pool</label>
-                                                <input className="w-full bg-black/40 border border-white/5 rounded-xl px-3 py-2 text-[10px]" value=${t.prizePool} onChange=${(e) => setLocalTournaments(localTournaments.map(x => x.id === t.id ? {...x, prizePool: e.target.value} : x))} />
+
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div className="space-y-1">
+                                                    <label className="text-[8px] text-white/20 uppercase font-bold ml-1">Type</label>
+                                                    <select className="w-full bg-black/40 border border-white/5 rounded-2xl px-4 py-3 text-xs text-white" value=${t.matchType} onChange=${(e) => updateTournament(t.id, 'matchType', e.target.value)}>
+                                                        <option value="Solo">Solo</option>
+                                                        <option value="Duo">Duo</option>
+                                                        <option value="Squad">Squad</option>
+                                                    </select>
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <label className="text-[8px] text-white/20 uppercase font-bold ml-1">Status</label>
+                                                    <select className="w-full bg-black/40 border border-white/5 rounded-2xl px-4 py-3 text-xs text-white" value=${t.status} onChange=${(e) => updateTournament(t.id, 'status', e.target.value)}>
+                                                        <option value="Open">Open</option>
+                                                        <option value="Full">Full</option>
+                                                        <option value="Completed">Completed</option>
+                                                    </select>
+                                                </div>
                                             </div>
-                                            <div className="space-y-1">
-                                                <label className="text-[8px] text-white/20 uppercase font-bold ml-1">Current Players</label>
-                                                <input type="number" className="w-full bg-black/40 border border-white/5 rounded-xl px-3 py-2 text-[10px]" value=${t.joinedSlots} onChange=${(e) => setLocalTournaments(localTournaments.map(x => x.id === t.id ? {...x, joinedSlots: parseInt(e.target.value)||0} : x))} />
+
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div className="space-y-1">
+                                                    <label className="text-[8px] text-white/20 uppercase font-bold ml-1">Entry Fee (₹)</label>
+                                                    <input type="number" className="w-full bg-black/40 border border-white/5 rounded-2xl px-4 py-3 text-xs" value=${t.entryFee} onChange=${(e) => updateTournament(t.id, 'entryFee', parseInt(e.target.value)||0)} />
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <label className="text-[8px] text-white/20 uppercase font-bold ml-1">Prize Pool</label>
+                                                    <input className="w-full bg-black/40 border border-white/5 rounded-2xl px-4 py-3 text-xs" value=${t.prizePool} onChange=${(e) => updateTournament(t.id, 'prizePool', e.target.value)} />
+                                                </div>
                                             </div>
+
+                                            <div className="grid grid-cols-3 gap-3">
+                                                <div className="space-y-1">
+                                                    <label className="text-[8px] text-white/20 uppercase font-bold ml-1">Total Slots</label>
+                                                    <input type="number" className="w-full bg-black/40 border border-white/5 rounded-2xl px-3 py-3 text-xs" value=${t.totalSlots} onChange=${(e) => updateTournament(t.id, 'totalSlots', parseInt(e.target.value)||0)} />
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <label className="text-[8px] text-white/20 uppercase font-bold ml-1">Joined</label>
+                                                    <input type="number" className="w-full bg-black/40 border border-white/5 rounded-2xl px-3 py-3 text-xs" value=${t.joinedSlots} onChange=${(e) => updateTournament(t.id, 'joinedSlots', parseInt(e.target.value)||0)} />
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <label className="text-[8px] text-white/20 uppercase font-bold ml-1">Min. Slots</label>
+                                                    <input type="number" className="w-full bg-black/40 border border-white/5 rounded-2xl px-3 py-3 text-xs" value=${t.minSlots} onChange=${(e) => updateTournament(t.id, 'minSlots', parseInt(e.target.value)||0)} />
+                                                </div>
+                                            </div>
+
                                             <div className="space-y-1">
-                                                <label className="text-[8px] text-white/20 uppercase font-bold ml-1">Total Slots</label>
-                                                <input type="number" className="w-full bg-black/40 border border-white/5 rounded-xl px-3 py-2 text-[10px]" value=${t.totalSlots} onChange=${(e) => setLocalTournaments(localTournaments.map(x => x.id === t.id ? {...x, totalSlots: parseInt(e.target.value)||48} : x))} />
+                                                <label className="text-[8px] text-white/20 uppercase font-bold ml-1">Date & Time (30 Oct, 08:00 PM)</label>
+                                                <input className="w-full bg-black/40 border border-white/5 rounded-2xl px-4 py-3 text-xs" value=${t.dateTime} onChange=${(e) => updateTournament(t.id, 'dateTime', e.target.value)} />
+                                            </div>
+
+                                            <div className="space-y-1">
+                                                <label className="text-[8px] text-white/20 uppercase font-bold ml-1">Cover Image URL</label>
+                                                <input className="w-full bg-black/40 border border-white/5 rounded-2xl px-4 py-3 text-xs font-mono" value=${t.image} onChange=${(e) => updateTournament(t.id, 'image', e.target.value)} />
+                                            </div>
+
+                                            <div className="space-y-1">
+                                                <label className="text-[8px] text-white/20 uppercase font-bold ml-1">Match Description</label>
+                                                <textarea className="w-full bg-black/40 border border-white/5 rounded-2xl px-4 py-3 text-xs min-h-[60px] resize-none" value=${t.description} onChange=${(e) => updateTournament(t.id, 'description', e.target.value)} />
                                             </div>
                                         </div>
                                     </div>
                                 `)}
+                            </div>
+                        </section>
+
+                        <section className="space-y-4">
+                            <h3 className="text-[10px] font-bold text-white/20 uppercase tracking-[0.2em] ml-1">Safety Rules</h3>
+                            <div className="bg-[#121212] rounded-3xl p-6 border border-white/5 space-y-4 shadow-xl">
+                                ${localConfig.rules.map((rule, idx) => html`
+                                    <div key=${idx} className="flex gap-2 items-start bg-black/20 p-3 rounded-2xl border border-white/5 group">
+                                        <textarea className="flex-1 bg-transparent border-none outline-none text-[10px] min-h-[40px] resize-none leading-relaxed" value=${rule} onChange=${(e) => updateRule(idx, e.target.value)} />
+                                        <button onClick=${() => removeRule(idx)} className="p-2 text-red-500/10 group-hover:text-red-500 transition-colors"><${Lucide.Trash2} size=${14}/></button>
+                                    </div>
+                                `)}
+                                <button onClick=${addRule} className="w-full py-4 bg-neon/10 border border-neon/20 rounded-2xl text-[10px] font-bold text-neon uppercase mt-2 tracking-widest">+ ADD RULE</button>
                             </div>
                         </section>
 
                         <section className="space-y-4 pb-20">
-                            <h3 className="text-[10px] font-bold text-white/20 uppercase tracking-[0.2em] ml-1">GitHub Config</h3>
-                            <div className="bg-[#121212] rounded-2xl p-4 border border-white/5 space-y-4">
-                                <input placeholder="Personal Access Token" type="password" className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-3 text-xs" value=${github.token} onChange=${(e) => setGithub({...github, token: e.target.value})} />
-                                <input placeholder="Owner/Repo (e.g. user/myrepo)" className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-3 text-xs" value=${github.repo} onChange=${(e) => setGithub({...github, repo: e.target.value})} />
+                            <h3 className="text-[10px] font-bold text-white/20 uppercase tracking-[0.2em] ml-1">GitHub Connection</h3>
+                            <div className="bg-[#121212] rounded-3xl p-6 border border-white/5 space-y-4 shadow-xl">
+                                <input placeholder="Personal Access Token" type="password" className="w-full bg-black/40 border border-white/5 rounded-2xl px-5 py-3 text-xs font-mono" value=${github.token} onChange=${(e) => setGithub({...github, token: e.target.value})} />
+                                <input placeholder="Owner/Repo" className="w-full bg-black/40 border border-white/5 rounded-2xl px-5 py-3 text-xs font-mono" value=${github.repo} onChange=${(e) => setGithub({...github, repo: e.target.value})} />
+                                <p className="text-[8px] text-white/20 italic text-center leading-relaxed">Required for instant cloud updates.</p>
                             </div>
                         </section>
                     </main>
-                    <footer className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-[#121212] border-t border-white/5 p-5 flex flex-col gap-3 shadow-[0_-10px_40px_rgba(0,0,0,0.8)]">
-                        ${status.msg && html`<div className=${`text-[10px] font-bold uppercase text-center py-2.5 rounded-xl ${status.state === 'error' ? 'text-red-500 bg-red-500/10' : 'text-green-500 bg-green-500/10'}`}>${status.msg}</div>`}
-                        <button onClick=${pushToGitHub} disabled=${status.state === 'loading'} className="w-full bg-neon py-4 rounded-2xl font-gaming text-sm tracking-widest text-white shadow-xl flex items-center justify-center gap-2 active:scale-95 transition-all">
-                            ${status.state === 'loading' ? html`<div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>` : html`<${Lucide.Globe} size=${18}/>`}
-                            ${status.state === 'loading' ? 'SAVING...' : 'SYNC ALL CHANGES'}
+                    <footer className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-[#121212] border-t border-white/5 p-6 flex flex-col gap-3 shadow-[0_-10px_40px_rgba(0,0,0,0.8)] z-50">
+                        ${status.msg && html`<div className=${`text-[10px] font-bold uppercase text-center py-2.5 rounded-2xl ${status.state === 'error' ? 'text-red-500 bg-red-500/10' : 'text-green-500 bg-green-500/10'}`}>${status.msg}</div>`}
+                        <button onClick=${pushToGitHub} disabled=${status.state === 'loading'} className="w-full bg-neon py-5 rounded-3xl font-bold text-sm tracking-widest text-white shadow-2xl flex items-center justify-center gap-3 active:scale-95 transition-all">
+                            ${status.state === 'loading' ? html`<div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>` : html`<${Lucide.Globe} size=${20}/>`}
+                            ${status.state === 'loading' ? 'PUBLISHING...' : 'SAVE & SYNC CLOUD'}
                         </button>
                     </footer>
                 </div>
@@ -291,34 +371,57 @@
             const [isAdminLoginOpen, setIsAdminLoginOpen] = useState(false);
             const [passInput, setPassInput] = useState('');
             const [loading, setLoading] = useState(true);
+            const [copiedUpi, setCopiedUpi] = useState(false);
+
+            const fetchData = useCallback(async () => {
+                setLoading(true);
+                try {
+                    const adminSecrets = localStorage.getItem(ADMIN_STORAGE_KEY);
+                    let data = null;
+
+                    if (adminSecrets) {
+                        const { token, repo, path } = JSON.parse(adminSecrets);
+                        if (token && repo) {
+                            const apiRes = await fetch(`https://api.github.com/repos/${repo}/contents/${path}`, {
+                                headers: { 'Authorization': `token ${token}` }
+                            });
+                            if (apiRes.ok) {
+                                const json = await apiRes.json();
+                                data = JSON.parse(decodeURIComponent(escape(atob(json.content))));
+                            }
+                        }
+                    }
+
+                    if (!data) {
+                        const rawRes = await fetch(GITHUB_RAW_URL + '?t=' + Date.now());
+                        if (rawRes.ok) data = await rawRes.json();
+                    }
+
+                    if (data) {
+                        setConfig({
+                            appName: data.appName || DEFAULT_CONFIG.appName,
+                            themeColor: data.themeColor || DEFAULT_CONFIG.themeColor,
+                            banners: data.banners || DEFAULT_CONFIG.banners,
+                            rules: data.rules || DEFAULT_CONFIG.rules,
+                            upiId: data.upiId || DEFAULT_CONFIG.upiId,
+                            adminWhatsApp: data.adminWhatsApp || DEFAULT_CONFIG.adminWhatsApp
+                        });
+                        setTournaments(data.tournaments || []);
+                    }
+                } catch (e) { 
+                    console.error("Fetch Error:", e);
+                    setTournaments(DEFAULT_CONFIG.tournaments);
+                }
+                setLoading(false);
+            }, []);
 
             useEffect(() => {
                 const savedUser = localStorage.getItem(STORAGE_KEY);
                 if (savedUser) {
                     try { setUser(JSON.parse(savedUser)); } catch (e) { localStorage.removeItem(STORAGE_KEY); }
                 }
-
-                const fetchData = async () => {
-                    setLoading(true);
-                    try {
-                        const res = await fetch(GITHUB_URL + '?t=' + Date.now());
-                        if (res.ok) {
-                            const data = await res.json();
-                            setConfig({
-                                appName: data.appName || DEFAULT_CONFIG.appName,
-                                themeColor: data.themeColor || DEFAULT_CONFIG.themeColor,
-                                banners: data.banners || DEFAULT_CONFIG.banners,
-                                rules: data.rules || DEFAULT_CONFIG.rules,
-                                upiId: data.upiId || DEFAULT_CONFIG.upiId,
-                                adminWhatsApp: data.adminWhatsApp || DEFAULT_CONFIG.adminWhatsApp
-                            });
-                            setTournaments(data.tournaments || []);
-                        }
-                    } catch (e) { console.error("Fetch Error:", e); }
-                    setLoading(false);
-                };
                 fetchData();
-            }, []);
+            }, [fetchData]);
 
             useEffect(() => {
                 const themeTag = document.getElementById('dynamic-theme');
@@ -327,8 +430,14 @@
                 }
             }, [config.themeColor]);
 
+            const copyUpiId = () => {
+                navigator.clipboard.writeText(config.upiId);
+                setCopiedUpi(true);
+                setTimeout(() => setCopiedUpi(false), 2000);
+            };
+
             const handleJoinConfirmation = (t) => {
-                const msg = encodeURIComponent(`Hi Admin!\n\nI want to confirm my registration for:\n*${t.name}*\n\n*PLAYER DETAILS:*\nIGN: ${user?.ign}\nUID: ${user?.uid}\nFee Paid: ₹${t.entryFee}\n\nI have attached the screenshot below.`);
+                const msg = encodeURIComponent(`Hi Admin!\n\nConfirming for: *${t.name}*\n\n*PLAYER:*\nIGN: ${user?.ign}\nUID: ${user?.uid}\nUPI ID: ${user?.upiId}\nPaid: ₹${t.entryFee}\n\n[Attach Screenshot Here]`);
                 window.open(`https://wa.me/${config.adminWhatsApp}?text=${msg}`, '_blank');
             };
 
@@ -337,13 +446,13 @@
             if (!user) return html`
                 <div className="min-h-screen bg-[#0a0a0a] flex flex-col items-center px-8 py-12 text-white">
                     <div className="w-20 h-20 bg-neon rounded-[2.5rem] flex items-center justify-center mb-8 pulse shadow-2xl"><span className="font-gaming text-4xl italic">FF</span></div>
-                    <h2 className="font-gaming text-2xl tracking-widest uppercase">Register</h2>
-                    <p className="text-white/30 text-[9px] mt-2 mb-10 tracking-[0.3em] uppercase font-bold text-center">Create your pro identity</p>
+                    <h2 className="font-gaming text-2xl tracking-widest uppercase italic">Create Profile</h2>
+                    <p className="text-white/30 text-[9px] mt-2 mb-10 tracking-[0.3em] uppercase font-bold text-center">Enter the Global Arena</p>
                     <div className="w-full max-w-xs space-y-4">
                         <input placeholder="Full Name" className="w-full bg-[#121212] border border-white/5 rounded-2xl px-5 py-4 text-sm" value=${onboard.fullName} onChange=${(e) => setOnboard({ ...onboard, fullName: e.target.value })} />
-                        <input placeholder="In-Game Name (IGN)" className="w-full bg-[#121212] border border-white/5 rounded-2xl px-5 py-4 text-sm" value=${onboard.ign} onChange=${(e) => setOnboard({ ...onboard, ign: e.target.value })} />
+                        <input placeholder="IGN (In-Game Name)" className="w-full bg-[#121212] border border-white/5 rounded-2xl px-5 py-4 text-sm" value=${onboard.ign} onChange=${(e) => setOnboard({ ...onboard, ign: e.target.value })} />
                         <input placeholder="Free Fire UID" className="w-full bg-[#121212] border border-white/5 rounded-2xl px-5 py-4 text-sm" value=${onboard.uid} onChange=${(e) => setOnboard({ ...onboard, uid: e.target.value })} />
-                        <input placeholder="Level" className="w-full bg-[#121212] border border-white/5 rounded-2xl px-5 py-4 text-sm" value=${onboard.level} onChange=${(e) => setOnboard({ ...onboard, level: e.target.value })} />
+                        <input placeholder="Current Level" className="w-full bg-[#121212] border border-white/5 rounded-2xl px-5 py-4 text-sm" value=${onboard.level} onChange=${(e) => setOnboard({ ...onboard, level: e.target.value })} />
                         <input placeholder="UPI ID" className="w-full bg-[#121212] border border-white/5 rounded-2xl px-5 py-4 text-sm" value=${onboard.upiId} onChange=${(e) => setOnboard({ ...onboard, upiId: e.target.value })} />
                         <button onClick=${() => { if(onboard.ign && onboard.uid) { setUser(onboard); localStorage.setItem(STORAGE_KEY, JSON.stringify(onboard)); } else alert("Required: IGN and UID"); }} className="w-full bg-neon py-4 rounded-2xl font-gaming text-sm tracking-widest shadow-xl mt-6 active:scale-95 transition-all">ENTER ARENA</button>
                     </div>
@@ -355,130 +464,183 @@
             return html`
                 <div className="flex flex-col h-screen max-w-md mx-auto bg-[#0a0a0a] overflow-hidden relative">
                     <header className="px-5 py-4 bg-[#121212] border-b border-white/5 flex items-center justify-between z-40 shadow-xl">
-                        <div className="flex items-center gap-2"><div className="w-8 h-8 bg-neon rounded-xl flex items-center justify-center shadow-lg"><span className="text-white font-gaming text-xs italic">FF</span></div><h1 className="font-gaming text-sm tracking-wider text-neon">${config.appName}</h1></div>
+                        <div className="flex items-center gap-2"><div className="w-8 h-8 bg-neon rounded-xl flex items-center justify-center shadow-lg"><span className="text-white font-gaming text-xs italic">FF</span></div><h1 className="font-bold text-[10px] tracking-widest text-neon uppercase">${config.appName}</h1></div>
                         <div className="flex items-center gap-1">
-                            <a href="https://youtube.com/@shinzofreefire" className="p-2 text-white/20 hover:text-white"><${Lucide.Youtube} size=${18}/></a>
-                            <a href="https://www.instagram.com/legend_shinzo_ff?igsh=MWNhMmx3ZG5oNDdkbw==/shinzo_ff" className="p-2 text-white/20 hover:text-white"><${Lucide.Instagram} size=${18}/></a>
-                            <button onClick=${() => setIsAdminLoginOpen(true)} className="p-2 text-white/10 hover:text-neon"><${Lucide.Lock} size=${14}/></button>
+                            <a href="https://youtube.com/@shinzofreefire" className="p-2 text-white/20 hover:text-white transition-colors"><${Lucide.Youtube} size=${18}/></a>
+                            <a href="https://instagram.com/shinzo_ff" className="p-2 text-white/20 hover:text-white transition-colors"><${Lucide.Instagram} size=${18}/></a>
+                            <button onClick=${() => setIsAdminLoginOpen(true)} className="p-2 text-white/10 hover:text-neon transition-colors"><${Lucide.Lock} size=${14}/></button>
                         </div>
                     </header>
 
                     <main className="flex-1 overflow-y-auto pb-24">
-                        ${loading ? html`<div className="flex flex-col items-center justify-center h-full gap-4"><div className="w-10 h-10 border-2 border-neon border-t-transparent rounded-full animate-spin"></div><p className="font-gaming text-[9px] tracking-[0.4em] text-white/10">SYNCING LOBBY...</p></div>` : 
+                        ${loading ? html`<div className="flex flex-col items-center justify-center h-full gap-4"><div className="w-10 h-10 border-2 border-neon border-t-transparent rounded-full animate-spin"></div><p className="font-bold text-[8px] tracking-[0.4em] text-white/10 italic">SYNCING WITH SERVER...</p></div>` : 
                         html`
                             ${activeTab === 'home' && html`
                                 <div className="p-4 space-y-6">
-                                    <div className="relative w-full h-48 rounded-[2.5rem] overflow-hidden border border-white/5 bg-[#121212] shadow-2xl group">
+                                    <div className="relative w-full h-40 rounded-[2.5rem] overflow-hidden border border-white/5 bg-[#121212] shadow-2xl group">
                                         <img src=${config.banners[0] || ""} className="w-full h-full object-cover opacity-60 group-hover:scale-105 transition-transform duration-[2s]" />
                                         <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent"></div>
                                         <div className="absolute bottom-6 left-6">
-                                            <p className="font-gaming text-[9px] text-neon tracking-[0.4em] uppercase mb-1 drop-shadow-lg">LIVE SCRIMS</p>
-                                            <h3 className="font-gaming text-2xl text-white uppercase tracking-wider drop-shadow-2xl italic">PRO ARENA</h3>
+                                            <p className="text-[8px] text-neon tracking-[0.4em] uppercase font-bold mb-1">GLOBAL SCRIMS</p>
+                                            <h3 className="font-gaming text-xl text-white uppercase tracking-wider italic">PRO ARENA</h3>
                                         </div>
                                     </div>
-                                    <div className="flex items-center justify-between px-2"><h2 className="font-gaming text-[11px] tracking-widest text-white/20 uppercase">Available Scrims</h2></div>
-                                    <div className="grid gap-5">
-                                        ${tournaments.length === 0 ? html`<div className="text-center py-20 text-white/10 font-gaming text-sm">NO MATCHES LIVE</div>` : tournaments.map(t => html`
-                                            <div key=${t.id} onClick=${() => { setSelectedT(t); setShowPayment(false); }} className="bg-[#121212] rounded-[3rem] overflow-hidden border border-white/5 p-5 flex flex-col gap-5 active:scale-[0.98] transition-all cursor-pointer shadow-xl">
-                                                <div className="relative h-36 rounded-[2rem] overflow-hidden">
+                                    <div className="flex items-center justify-between px-2"><h2 className="text-[10px] font-bold tracking-widest text-white/20 uppercase">Available Scrims</h2></div>
+                                    <div className="grid gap-4">
+                                        ${tournaments.length === 0 ? html`<div className="text-center py-20 text-white/10 font-bold text-xs tracking-widest uppercase">NO MATCHES LIVE</div>` : tournaments.map(t => {
+                                            const slotsLeft = (t.totalSlots || 0) - (t.joinedSlots || 0);
+                                            const isUrgent = slotsLeft <= 5 && slotsLeft > 0;
+                                            
+                                            return html`
+                                            <div key=${t.id} onClick=${() => { setSelectedT(t); setShowPayment(false); }} className="bg-[#121212] rounded-[2.5rem] overflow-hidden border border-white/5 p-4 flex flex-col gap-4 active:scale-[0.98] transition-all cursor-pointer shadow-xl relative">
+                                                <div className="relative h-32 rounded-[2rem] overflow-hidden">
                                                     <img src=${t.image || ""} className="w-full h-full object-cover opacity-50" />
-                                                    <div className="absolute top-4 left-4 flex gap-2">
-                                                        <span className="text-[10px] font-bold px-3 py-1 rounded-full bg-green-500/10 text-green-500 border border-green-500/20 uppercase tracking-widest">Live</span>
-                                                        <span className="text-[10px] font-bold px-3 py-1 rounded-full bg-neon/20 text-white border border-neon/30 tracking-widest">₹${t.entryFee}</span>
+                                                    <div className="absolute top-3 left-3 flex flex-col gap-1.5">
+                                                        <div className="flex gap-1.5">
+                                                            <span className="text-[8px] font-bold px-2 py-0.5 rounded-full bg-green-500/10 text-green-500 border border-green-500/20 uppercase tracking-widest">Live</span>
+                                                            <span className="text-[8px] font-bold px-2 py-0.5 rounded-full bg-neon/20 text-white border border-neon/30 tracking-widest">₹${t.entryFee}</span>
+                                                        </div>
+                                                        <div className="bg-black/40 backdrop-blur-sm px-2 py-1 rounded-lg border border-white/5 flex items-center gap-1.5 text-[9px] text-white/80">
+                                                            <${Lucide.Timer} size=${10} className="text-neon" />
+                                                            <${CountdownTimer} dateStr=${t.dateTime} />
+                                                        </div>
                                                     </div>
-                                                    <div className="absolute bottom-5 left-5"><h3 className="font-gaming text-xl text-white uppercase drop-shadow-xl tracking-wide">${t.name}</h3></div>
+                                                    <div className="absolute bottom-4 left-4">
+                                                        <h3 className="font-bold text-lg text-white tracking-tight leading-none">${t.name}</h3>
+                                                    </div>
+                                                    ${isUrgent && html`
+                                                        <div className="absolute top-3 right-3 bg-red-500 text-white text-[7px] font-bold px-1.5 py-0.5 rounded pulse-fast uppercase tracking-widest">
+                                                            Fast!
+                                                        </div>
+                                                    `}
                                                 </div>
-                                                <div className="flex justify-between items-center px-2">
-                                                    <div className="flex flex-col gap-1"><span className="text-[9px] text-white/20 uppercase font-bold tracking-widest">Winning Pool</span><div className="flex items-center gap-2 text-yellow-500"><${Lucide.Trophy} size=${14}/><span className="text-sm font-gaming tracking-wide">${t.prizePool}</span></div></div>
-                                                    <div className="flex flex-col gap-1 text-right"><span className="text-[9px] text-white/20 uppercase font-bold tracking-widest">Schedule</span><div className="flex items-center gap-2 text-white/60"><${Lucide.Clock} size=${14}/><span className="text-[10px] font-bold tracking-widest">${t.dateTime.split(',')[1]}</span></div></div>
+                                                <div className="flex justify-between items-center px-1">
+                                                    <div className="flex flex-col gap-0.5">
+                                                        <span className="text-[8px] text-white/20 uppercase font-bold tracking-widest">Prize Pool</span>
+                                                        <div className="flex items-center gap-1.5 text-yellow-500/80">
+                                                            <${Lucide.Trophy} size=${12}/>
+                                                            <span className="text-xs font-bold tracking-tight">${t.prizePool}</span>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex flex-col gap-0.5 text-right">
+                                                        <span className="text-[8px] text-white/20 uppercase font-bold tracking-widest">Availability</span>
+                                                        <div className=${`text-[9px] font-bold tracking-widest uppercase ${isUrgent ? 'text-neon' : 'text-white/40'}`}>
+                                                            ${slotsLeft > 0 ? `${slotsLeft} LEFT` : 'FULL'}
+                                                        </div>
+                                                    </div>
                                                 </div>
-                                                <div className="px-2 space-y-2">
-                                                    <div className="flex justify-between text-[9px] font-bold uppercase text-white/30 tracking-widest"><span>Capacity</span><span>${t.joinedSlots} / ${t.totalSlots}</span></div>
-                                                    <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden shadow-inner"><div className="h-full bg-neon rounded-full transition-all duration-1000" style=${{width: `${(t.joinedSlots/t.totalSlots)*100}%`}}></div></div>
+                                                <div className="px-1">
+                                                    <div className="h-1 w-full bg-white/5 rounded-full overflow-hidden">
+                                                        <div className="h-full bg-neon rounded-full transition-all duration-1000" style=${{width: `${((t.joinedSlots || 0)/(t.totalSlots || 1))*100}%`}}></div>
+                                                    </div>
                                                 </div>
                                             </div>
-                                        `)}
+                                        `})}
                                     </div>
                                 </div>
                             `}
                             ${activeTab === 'rules' && html`
                                 <div className="p-6 space-y-6 animate-in slide-in-from-bottom">
-                                    <div className="flex items-center gap-4"><div className="w-12 h-12 bg-white/5 rounded-2xl flex items-center justify-center text-neon shadow-xl"><${Lucide.FileText} size=${24} /></div><h2 className="font-gaming text-lg tracking-widest uppercase">Arena Rules</h2></div>
-                                    <div className="bg-[#121212] rounded-[3rem] p-10 border border-white/5 space-y-8 shadow-2xl">
-                                        ${config.rules.map((r, i) => html`<div key=${i} className="flex gap-5"><span className="font-gaming text-xs text-neon/20 pt-1">${i+1}</span><p className="text-xs text-white/40 leading-loose tracking-wide">${r}</p></div>`)}
+                                    <div className="flex items-center gap-4"><div className="w-10 h-10 bg-white/5 rounded-2xl flex items-center justify-center text-neon border border-white/5"><${Lucide.ShieldCheck} size=${20} /></div><h2 className="font-bold text-base tracking-widest uppercase italic">Arena Rules</h2></div>
+                                    <div className="bg-[#121212] rounded-[2.5rem] p-8 border border-white/5 space-y-6 shadow-2xl">
+                                        ${config.rules.map((r, i) => html`<div key=${i} className="flex gap-4 group"><span className="text-[10px] text-neon/20 pt-1 group-hover:text-neon transition-colors">${i+1}</span><p className="text-[11px] text-white/50 leading-relaxed tracking-wide group-hover:text-white/80 transition-colors">${r}</p></div>`)}
                                     </div>
                                 </div>
                             `}
                             ${activeTab === 'profile' && html`
                                 <div className="p-6 animate-in fade-in flex flex-col gap-10">
-                                    <h2 className="font-gaming text-sm tracking-[0.3em] text-white/20 uppercase text-center">My Identity</h2>
+                                    <h2 className="text-[9px] font-bold tracking-[0.3em] text-white/20 uppercase text-center">My Identity</h2>
                                     <div className="flex flex-col items-center gap-6">
-                                        <div className="w-28 h-28 rounded-[2.5rem] bg-gradient-to-tr from-[#121212] to-[#1a1a1a] border border-white/5 flex items-center justify-center shadow-2xl relative">
-                                            <span className="font-gaming text-5xl text-neon drop-shadow-2xl">${initialChar}</span>
-                                            <button onClick=${() => alert("Edit profile in next update")} className="absolute -bottom-1 -right-1 p-3 bg-neon rounded-2xl text-white shadow-xl border-4 border-[#0a0a0a]"><${Lucide.Settings2} size=${14}/></button>
+                                        <div className="w-24 h-24 rounded-[2rem] bg-gradient-to-tr from-[#121212] to-[#1a1a1a] border border-white/5 flex items-center justify-center shadow-2xl relative">
+                                            <span className="font-bold text-4xl text-neon drop-shadow-2xl">${initialChar}</span>
+                                            <button className="absolute -bottom-1 -right-1 p-2.5 bg-neon rounded-xl text-white shadow-xl border-4 border-[#0a0a0a]"><${Lucide.Award} size=${14}/></button>
                                         </div>
                                         <div className="text-center">
-                                            <h2 className="font-gaming text-2xl tracking-[0.1em] text-white uppercase">${user.ign}</h2>
-                                            <p className="text-[10px] text-white/20 uppercase tracking-[0.4em] font-bold mt-2 italic">Elite Tier Level ${user.level}</p>
+                                            <h2 className="font-bold text-xl tracking-wide text-white uppercase italic">${user.ign}</h2>
+                                            <p className="text-[9px] text-white/20 uppercase tracking-[0.4em] font-bold mt-2 italic">Elite Tier Level ${user.level}</p>
                                         </div>
                                     </div>
-                                    <div className="bg-[#121212] rounded-[3rem] p-10 border border-white/5 space-y-8 shadow-2xl">
-                                        <div className="space-y-1"><label className="text-[9px] font-bold text-white/10 uppercase tracking-widest ml-1">Real Name</label><div className="text-sm text-white/60 font-medium px-1">${user.fullName}</div></div>
-                                        <div className="space-y-1"><label className="text-[9px] font-bold text-white/10 uppercase tracking-widest ml-1">Free Fire UID</label><div className="text-sm text-white/60 font-medium px-1">${user.uid}</div></div>
-                                        <div className="space-y-1"><label className="text-[9px] font-bold text-white/10 uppercase tracking-widest ml-1">Verified UPI ID</label><div className="text-sm text-white/60 font-medium px-1">${user.upiId}</div></div>
+                                    <div className="bg-[#121212] rounded-[2.5rem] p-8 border border-white/5 space-y-6 shadow-2xl">
+                                        <div className="space-y-0.5"><label className="text-[8px] font-bold text-white/10 uppercase tracking-widest ml-1">Real Name</label><div className="text-xs text-white/60 font-medium px-1 uppercase">${user.fullName}</div></div>
+                                        <div className="space-y-0.5"><label className="text-[8px] font-bold text-white/10 uppercase tracking-widest ml-1">UID</label><div className="text-xs text-white/60 font-medium px-1">${user.uid}</div></div>
+                                        <div className="space-y-0.5"><label className="text-[8px] font-bold text-white/10 uppercase tracking-widest ml-1">UPI ID</label><div className="text-xs text-white/60 font-medium px-1">${user.upiId}</div></div>
                                     </div>
-                                    <button onClick=${() => { if(confirm("Reset profile?")) { localStorage.clear(); window.location.reload(); } }} className="text-[9px] text-white/10 uppercase font-bold tracking-[0.4em] hover:text-red-500 transition-colors">Destroy Session Data</button>
+                                    <button onClick=${() => { if(confirm("Reset profile?")) { localStorage.clear(); window.location.reload(); } }} className="text-[8px] text-white/10 uppercase font-bold tracking-[0.4em] hover:text-red-500 transition-colors">Destroy Session Data</button>
                                 </div>
                             `}
                         `}
                     </main>
 
                     <nav className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-[#121212] border-t border-white/5 flex justify-around items-center h-20 z-40 shadow-[0_-15px_50px_rgba(0,0,0,0.8)] px-8">
-                        <button onClick=${() => setActiveTab('home')} className=${`flex flex-col items-center gap-1.5 transition-all ${activeTab === 'home' ? 'text-neon scale-110' : 'text-white/10'}`}><${Lucide.Gamepad2} size=${22}/><span className="text-[8px] font-bold uppercase tracking-widest">Arena</span></button>
-                        <button onClick=${() => setActiveTab('rules')} className=${`flex flex-col items-center gap-1.5 transition-all ${activeTab === 'rules' ? 'text-neon scale-110' : 'text-white/10'}`}><${Lucide.Shield} size=${22}/><span className="text-[8px] font-bold uppercase tracking-widest">Safety</span></button>
-                        <button onClick=${() => setActiveTab('profile')} className=${`flex flex-col items-center gap-1.5 transition-all ${activeTab === 'profile' ? 'text-neon scale-110' : 'text-white/10'}`}><${Lucide.User} size=${22}/><span className="text-[8px] font-bold uppercase tracking-widest">Me</span></button>
+                        <button onClick=${() => setActiveTab('home')} className=${`flex flex-col items-center gap-1.5 transition-all ${activeTab === 'home' ? 'text-neon scale-105' : 'text-white/10'}`}><${Lucide.Gamepad2} size=${20}/><span className="text-[7px] font-bold uppercase tracking-[0.2em]">Arena</span></button>
+                        <button onClick=${() => setActiveTab('rules')} className=${`flex flex-col items-center gap-1.5 transition-all ${activeTab === 'rules' ? 'text-neon scale-105' : 'text-white/10'}`}><${Lucide.Shield} size=${20}/><span className="text-[7px] font-bold uppercase tracking-[0.2em]">Safety</span></button>
+                        <button onClick=${() => setActiveTab('profile')} className=${`flex flex-col items-center gap-1.5 transition-all ${activeTab === 'profile' ? 'text-neon scale-105' : 'text-white/10'}`}><${Lucide.User} size=${20}/><span className="text-[7px] font-bold uppercase tracking-[0.2em]">Me</span></button>
                     </nav>
 
                     ${selectedT && html`
-                        <div className="fixed inset-0 z-[100] flex items-end justify-center animate-in fade-in">
-                            <div className="absolute inset-0 bg-black/95 backdrop-blur-md" onClick=${() => { setSelectedT(null); setShowPayment(false); }}></div>
-                            <div className="relative w-full max-w-md bg-[#0a0a0a] rounded-t-[3.5rem] border-t border-white/10 p-10 space-y-8 animate-in slide-in-from-bottom shadow-2xl">
+                        <div className="fixed inset-0 z-[100] flex items-end justify-center animate-in fade-in overflow-y-auto">
+                            <div className="fixed inset-0 bg-black/95 backdrop-blur-md" onClick=${() => { setSelectedT(null); setShowPayment(false); }}></div>
+                            <div className="relative w-full max-w-md bg-[#0a0a0a] rounded-t-[3rem] border-t border-white/10 p-8 space-y-8 animate-in slide-in-from-bottom shadow-2xl mt-auto">
                                 ${!showPayment ? html`
-                                    <div className="text-center space-y-3">
-                                        <h2 className="font-gaming text-2xl text-white uppercase tracking-widest">${selectedT.name}</h2>
-                                        <p className="text-neon text-[10px] font-bold uppercase tracking-[0.5em] italic">REGISTRATION ACTIVE</p>
+                                    <div className="text-center space-y-2">
+                                        <h2 className="font-bold text-xl text-white uppercase tracking-tight">${selectedT.name}</h2>
+                                        <p className="text-neon text-[8px] font-bold uppercase tracking-[0.5em] italic">REGISTRATION ACTIVE</p>
                                     </div>
-                                    <div className="grid grid-cols-3 gap-3">
-                                        <div className="bg-[#121212] p-5 rounded-[2rem] border border-white/5 flex flex-col items-center gap-2"><${Lucide.User} size=${18} className="text-neon"/><span className="text-[9px] font-gaming uppercase tracking-widest">${selectedT.matchType}</span></div>
-                                        <div className="bg-[#121212] p-5 rounded-[2rem] border border-white/5 flex flex-col items-center gap-2"><${Lucide.Zap} size=${18} className="text-neon"/><span className="text-[9px] font-gaming uppercase tracking-widest text-yellow-500">${selectedT.prizePool}</span></div>
-                                        <div className="bg-[#121212] p-5 rounded-[2rem] border border-white/5 flex flex-col items-center gap-2"><${Lucide.Clock} size=${18} className="text-neon"/><span className="text-[9px] font-bold uppercase tracking-widest">${selectedT.dateTime.split(',')[0]}</span></div>
+                                    <div className="grid grid-cols-3 gap-2.5">
+                                        <div className="bg-[#121212] p-4 rounded-3xl border border-white/5 flex flex-col items-center gap-2"><${Lucide.User} size={16} className="text-neon"/><span className="text-[8px] font-bold uppercase tracking-widest">${selectedT.matchType}</span></div>
+                                        <div className="bg-[#121212] p-4 rounded-3xl border border-white/5 flex flex-col items-center gap-2"><${Lucide.Zap} size={16} className="text-neon"/><span className="text-[8px] font-bold uppercase tracking-widest text-yellow-500">${selectedT.prizePool}</span></div>
+                                        <div className="bg-[#121212] p-4 rounded-3xl border border-white/5 flex flex-col items-center gap-2"><${Lucide.Calendar} size={16} className="text-neon"/><span className="text-[8px] font-bold uppercase tracking-widest">${selectedT.dateTime.split(',')[0]}</span></div>
                                     </div>
-                                    <div className="bg-[#121212] p-8 rounded-[2.5rem] border border-white/5 space-y-5 shadow-inner">
-                                        <div className="flex justify-between items-center"><span className="text-[10px] text-white/20 uppercase font-bold tracking-widest">Arena Entry</span><span className="text-2xl font-gaming text-neon">₹${selectedT.entryFee}</span></div>
-                                        <div className="h-1.5 w-full bg-black rounded-full overflow-hidden"><div className="h-full bg-neon rounded-full" style=${{width: `${(selectedT.joinedSlots/selectedT.totalSlots)*100}%`}}></div></div>
-                                        <p className="text-[9px] text-center text-white/30 uppercase tracking-[0.2em] font-bold italic">Join ${selectedT.joinedSlots} others in this battle</p>
+                                    <div className="bg-[#121212] p-5 rounded-[2rem] border border-white/5 space-y-2">
+                                        <span className="text-[8px] font-bold text-white/20 uppercase tracking-widest block ml-1">Context</span>
+                                        <p className="text-[11px] text-white/50 leading-relaxed italic">${selectedT.description || "Standard match rules apply."}</p>
                                     </div>
-                                    <button onClick=${() => setShowPayment(true)} className="w-full bg-neon py-5 rounded-[2rem] font-gaming text-sm tracking-[0.3em] text-white shadow-2xl shadow-neon/40 flex items-center justify-center gap-4 active:scale-95 transition-all"><${Lucide.CreditCard} size=${22}/> JOIN MATCH & PAY</button>
+                                    <div className="bg-[#121212] p-6 rounded-[2.5rem] border border-white/5 space-y-4 shadow-inner">
+                                        <div className="flex justify-between items-center"><span className="text-[9px] text-white/20 uppercase font-bold tracking-widest">Registration Fee</span><span className="text-2xl font-bold text-neon tracking-tighter">₹${selectedT.entryFee}</span></div>
+                                    </div>
+                                    <button onClick=${() => setShowPayment(true)} className="w-full bg-neon py-5 rounded-3xl font-bold text-xs tracking-widest text-white shadow-2xl active:scale-95 transition-all uppercase flex items-center justify-center gap-3">
+                                        <${Lucide.CreditCard} size=${18}/> Proceed to Payment
+                                    </button>
                                 ` : html`
-                                    <div className="text-center space-y-6 animate-in slide-in-from-right">
+                                    <div className="text-center space-y-6 animate-in slide-in-from-right pb-4">
                                         <div className="text-center space-y-2">
-                                            <h2 className="font-gaming text-xl text-white uppercase tracking-widest">Checkout</h2>
-                                            <p className="text-neon text-[10px] font-bold uppercase tracking-[0.4em]">Payment for ${selectedT.name}</p>
+                                            <h2 className="font-bold text-lg text-white uppercase tracking-tight">Checkout</h2>
+                                            <p className="text-neon text-[8px] font-bold uppercase tracking-[0.4em]">Tournament: ${selectedT.name}</p>
                                         </div>
-                                        <div className="bg-[#121212] p-6 rounded-[2.5rem] border border-white/5 space-y-4">
-                                            <p className="text-[10px] font-bold text-red-500 uppercase tracking-widest italic leading-relaxed">
-                                                NOTE: Send payment screenshot to admin on WhatsApp after payment. Otherwise you cannot join.
-                                            </p>
+                                        
+                                        <div className="relative group">
+                                            <div className="bg-white p-4 rounded-[2.5rem] shadow-2xl mx-auto inline-block border-4 border-white">
+                                                <img src=${`https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(`upi://pay?pa=${config.upiId}&pn=${config.appName}&am=${selectedT.entryFee}&cu=INR&tn=${encodeURIComponent(selectedT.name)}`)}`} 
+                                                     className="w-56 h-56" 
+                                                     alt="Payment QR" />
+                                            </div>
+                                            <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-neon px-4 py-1.5 rounded-full shadow-xl">
+                                                <span className="text-[9px] font-bold text-white tracking-widest uppercase">SCAN TO PAY</span>
+                                            </div>
                                         </div>
-                                        <div className="bg-white p-6 rounded-[2.5rem] shadow-2xl mx-auto inline-block border-8 border-white">
-                                            <img src=${`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(`upi://pay?pa=${config.upiId}&pn=${config.appName}&am=${selectedT.entryFee}&cu=INR&tn=${encodeURIComponent(selectedT.name)}`)}`} className="w-48 h-48" />
+
+                                        <div className="bg-[#121212] p-5 rounded-3xl border border-white/5 space-y-3">
+                                            <div className="flex flex-col gap-1 items-center">
+                                                <span className="text-[7px] text-white/20 uppercase font-bold tracking-widest">Merchant UPI ID</span>
+                                                <div className="flex items-center gap-3 bg-black/40 px-4 py-2.5 rounded-2xl border border-white/5 w-full justify-between">
+                                                    <span className="text-[9px] font-mono text-white/60 tracking-wider overflow-hidden text-ellipsis">${config.upiId}</span>
+                                                    <button onClick=${copyUpiId} className="p-2 text-neon hover:bg-neon/10 rounded-xl transition-all">
+                                                        ${copiedUpi ? html`<${Lucide.Check} size=${14} />` : html`<${Lucide.Copy} size=${14} />`}
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <div className="flex justify-between items-center px-2 pt-2 border-t border-white/5">
+                                                <span className="text-[9px] font-bold text-white/40 uppercase tracking-widest">Amount</span>
+                                                <span className="text-lg font-bold text-neon">₹${selectedT.entryFee}</span>
+                                            </div>
                                         </div>
-                                        <div className="space-y-4">
-                                            <p className="text-[11px] font-gaming text-white uppercase tracking-widest">Total: ₹${selectedT.entryFee}</p>
-                                            <p className="text-white/20 text-[9px] uppercase tracking-widest">Scan the QR code to proceed</p>
+
+                                        <div className="space-y-4 pt-2">
+                                            <button onClick=${() => handleJoinConfirmation(selectedT)} className="w-full bg-[#25D366] py-5 rounded-3xl font-bold text-[10px] tracking-widest text-white shadow-xl flex items-center justify-center gap-3 active:scale-95 transition-all uppercase">
+                                                <${Lucide.MessageSquare} size=${20}/> SEND SCREENSHOT
+                                            </button>
+                                            <button onClick=${() => setShowPayment(false)} className="text-[9px] font-bold text-white/10 uppercase tracking-[0.2em] block mx-auto py-2 hover:text-white transition-colors">Go Back</button>
                                         </div>
-                                        <button onClick=${() => handleJoinConfirmation(selectedT)} className="w-full bg-[#25D366] py-5 rounded-[2rem] font-gaming text-xs tracking-[0.2em] text-white shadow-xl flex items-center justify-center gap-3 active:scale-95 transition-all"><${Lucide.MessageSquare} size=${22}/> CONFIRM ON WHATSAPP</button>
-                                        <button onClick=${() => setShowPayment(false)} className="text-[10px] font-bold text-white/20 uppercase tracking-widest block mx-auto">Go Back</button>
                                     </div>
                                 `}
                             </div>
@@ -488,17 +650,16 @@
                     ${isAdminLoginOpen && html`
                         <div className="fixed inset-0 z-[150] bg-black/98 flex items-center justify-center p-10 animate-in fade-in">
                             <div className="bg-[#121212] w-full max-w-xs rounded-[3rem] border border-white/5 p-12 flex flex-col items-center gap-10 shadow-2xl relative overflow-hidden">
-                                <div className="absolute top-0 left-0 w-full h-1 bg-neon opacity-20"></div>
                                 <button onClick=${() => setIsAdminLoginOpen(false)} className="absolute top-8 right-8 p-2 text-white/20"><${Lucide.X} size=${20}/></button>
-                                <div className="w-20 h-20 bg-neon/10 rounded-full flex items-center justify-center text-neon shadow-[0_0_30px_rgba(var(--neon-rgb),0.2)]"><${Lucide.ShieldAlert} size=${40} /></div>
-                                <div className="text-center space-y-2"><h3 className="font-gaming text-lg text-white uppercase tracking-widest">Terminal Login</h3><p className="text-[10px] text-white/20 uppercase tracking-[0.4em] font-bold">Authorized Access Only</p></div>
-                                <input type="password" placeholder="Passcode" className="w-full bg-black/40 border border-white/10 rounded-2xl px-5 py-5 text-center tracking-[0.6em] text-white focus:border-neon outline-none text-xl" value=${passInput} onChange=${(e) => setPassInput(e.target.value)} />
-                                <button onClick=${() => { if(passInput === "Pawan1645@") { setIsAdminOpen(true); setIsAdminLoginOpen(false); setPassInput(''); } else alert("Access Terminated"); }} className="w-full bg-neon py-5 rounded-2xl font-gaming text-xs tracking-widest text-white shadow-2xl active:scale-95 transition-all">DECRYPT CONSOLE</button>
+                                <div className="w-16 h-16 bg-neon/10 rounded-full flex items-center justify-center text-neon shadow-[0_0_30px_rgba(var(--neon-rgb),0.2)]"><${Lucide.ShieldAlert} size=${30} /></div>
+                                <div className="text-center space-y-2"><h3 className="font-bold text-base text-white uppercase tracking-widest">Admin Terminal</h3><p className="text-[8px] text-white/20 uppercase tracking-[0.4em] font-bold">Authorized Access Only</p></div>
+                                <input type="password" placeholder="••••••" className="w-full bg-black/40 border border-white/10 rounded-2xl px-5 py-5 text-center tracking-[0.6em] text-white focus:border-neon outline-none text-xl" value=${passInput} onChange=${(e) => setPassInput(e.target.value)} />
+                                <button onClick=${() => { if(passInput === "Pawan1645@") { setIsAdminOpen(true); setIsAdminLoginOpen(false); setPassInput(''); } else alert("Access Terminated"); }} className="w-full bg-neon py-5 rounded-3xl font-bold text-[10px] tracking-widest text-white shadow-2xl active:scale-95 transition-all">DECRYPT CONSOLE</button>
                             </div>
                         </div>
                     `}
 
-                    ${isAdminOpen && html`<${AdminPanel} config=${config} tournaments=${tournaments} onClose=${() => setIsAdminOpen(false)} />`}
+                    ${isAdminOpen && html`<${AdminPanel} config=${config} tournaments=${tournaments} onClose=${() => setIsAdminOpen(false)} onRefresh=${fetchData} />`}
                 </div>
             `;
         };
@@ -506,6 +667,5 @@
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(React.createElement(App));
     </script>
-<script type="module" src="/index.tsx"></script>
 </body>
 </html>
